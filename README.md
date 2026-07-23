@@ -29,7 +29,7 @@ residenza, tipo di servizio e data.
 5. **Chiede il tipo di servizio** e compone il nome finale:
 
 ```
-carta_identita_Rossetti_Marco_Salizzole_Attivazione_2026-07-23.pdf
+carta_identita_Rossi_Mario_Verona_Attivazione_2026-07-23.pdf
 ```
 
 6. Se qualcosa non è riconosciuto con certezza, **chiede conferma** invece di
