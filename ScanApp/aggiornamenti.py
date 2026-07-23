@@ -46,9 +46,12 @@ def _versione_tupla(v):
     return tuple(numeri[:3])
 
 
-def piu_recente(remota, locale=VERSIONE):
-    """True se 'remota' e' una versione successiva a quella locale."""
-    return _versione_tupla(remota) > _versione_tupla(locale)
+def piu_recente(remota, locale=None):
+    """True se 'remota' e' una versione successiva a quella locale.
+    NB: la versione locale si legge al momento della chiamata (non come valore
+    predefinito), cosi' resta corretta anche se VERSIONE viene modificata."""
+    return _versione_tupla(remota) > _versione_tupla(
+        locale if locale is not None else VERSIONE)
 
 
 def controlla(repo=None, log=None):
