@@ -7,3 +7,6 @@ scan_gui_config.json
 *.pfx
 # L'eseguibile non sta nel repository: viene allegato alle release
 ScanProgram/*.exe
+# Pacchetti locali e impostazioni dell'ambiente di lavoro
+*.zip
+.claude/

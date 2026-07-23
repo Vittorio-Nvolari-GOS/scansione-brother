@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($py = \\(Get-Command py -ErrorAction SilentlyContinue\\); if \\(-not $py\\) { $py = \\(Get-Command python -ErrorAction SilentlyContinue\\) }; if \\($py\\) { & $py.Source -m py_compile \"C:\\\\Claude\\\\scan_brother_ai.py\"; if \\($?\\) { \"OK sintassi valida\" } } else { \"Python non disponibile qui, salto il check\" })"
-    ]
-  }
-}
