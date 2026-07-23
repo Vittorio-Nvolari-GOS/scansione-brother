@@ -28,6 +28,7 @@ else:
 sys.path.insert(0, BASE)
 sys.path.insert(0, os.path.dirname(BASE))
 import scan_brother_ai as engine  # noqa: E402
+import aggiornamenti  # noqa: E402
 
 CONFIG_FILE = os.path.join(BASE, "scan_gui_config.json")
 PARAMETRI = ["DEVICE_ID", "DEVICE_NAME", "DPI", "COLOR_MODE", "SOURCE",
@@ -53,7 +54,7 @@ def _imposta_appid():
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Scansione Brother + OCR + LLM")
+        self.title(f"Scansione Brother + OCR + LLM  v{aggiornamenti.VERSIONE}")
         self.geometry("1020x680")
         self.minsize(860, 560)
         # Icona finestra = stessa dell'eseguibile (icona CustomTkinter)
@@ -71,6 +72,9 @@ class App(ctk.CTk):
         self._costruisci_ui()
         self.after(100, self._poll_queue)
         self.protocol("WM_DELETE_WINDOW", self._chiudi)
+        # Controllo aggiornamenti in background (non rallenta l'avvio)
+        threading.Thread(target=self._controlla_aggiornamenti,
+                         daemon=True).start()
 
     # ------------------------------------------------------------------ UI
     def _costruisci_ui(self):
@@ -472,6 +476,9 @@ class App(ctk.CTk):
                       command=self.elenca_scanner).pack(side="left", padx=8)
         ctk.CTkButton(f_btn, text="Apri cartella PDF",
                       command=self._apri_output).pack(side="left", padx=8)
+        ctk.CTkButton(f_btn, text="Cerca aggiornamenti",
+                      command=self._aggiornamenti_manuale).pack(side="left",
+                                                                padx=8)
 
     AUTO_LABEL = "(automatico)"
 
@@ -625,6 +632,73 @@ class App(ctk.CTk):
             os.startfile(cartella)
         else:
             messagebox.showinfo("Info", "La cartella non esiste ancora.")
+
+    # --------------------------------------------------------- Aggiornamenti
+    def _controlla_aggiornamenti(self):
+        """Chiede a GitHub se esiste una versione piu' recente. Gira in un
+        thread separato: se la rete non risponde, l'app parte comunque."""
+        try:
+            info = aggiornamenti.controlla()
+        except Exception:
+            return
+        if info:
+            self.after(0, lambda: self._proponi_aggiornamento(info))
+
+    def _aggiornamenti_manuale(self):
+        """Controllo aggiornamenti richiesto dall'utente: qui, a differenza
+        dell'avvio, si avvisa anche quando NON ci sono novita'."""
+        def lavoro():
+            info = None
+            try:
+                info = aggiornamenti.controlla()
+            except Exception as e:
+                self.log(f"[ERRORE] controllo aggiornamenti: {e}")
+            if info:
+                self.after(0, lambda: self._proponi_aggiornamento(info))
+            else:
+                self.after(0, lambda: messagebox.showinfo(
+                    "Aggiornamenti",
+                    f"Stai usando la versione più recente "
+                    f"({aggiornamenti.VERSIONE})."))
+        threading.Thread(target=lavoro, daemon=True).start()
+
+    def _proponi_aggiornamento(self, info):
+        """Popup che chiede se installare l'aggiornamento trovato."""
+        note = info.get("note", "")
+        if len(note) > 400:
+            note = note[:400] + "..."
+        testo = (f"È disponibile una nuova versione: {info['versione']}\n"
+                 f"Versione in uso: {aggiornamenti.VERSIONE}\n\n"
+                 + (f"Novità:\n{note}\n\n" if note else "")
+                 + "Vuoi scaricarla e installarla ora?\n"
+                   "L'applicazione verrà riavviata al termine.")
+        if not messagebox.askyesno("Aggiornamento disponibile", testo):
+            self.log("Aggiornamento rimandato.")
+            return
+        threading.Thread(target=self._esegui_aggiornamento, args=(info,),
+                         daemon=True).start()
+
+    def _esegui_aggiornamento(self, info):
+        """Scarica il nuovo eseguibile e avvia la sostituzione."""
+        self.req_queue.put(("stato", "Scaricamento aggiornamento..."))
+        try:
+            destinazione = os.path.join(tempfile.gettempdir(),
+                                        "ScansioneBrother_nuovo.exe")
+
+            def progresso(fatti, totale):
+                if totale:
+                    pct = fatti * 100.0 / totale
+                    self.req_queue.put(
+                        ("stato", f"Scaricamento aggiornamento... {pct:.0f}% "
+                                  f"({fatti/1048576:.1f} di {totale/1048576:.1f} MB)"))
+
+            aggiornamenti.scarica(info["url"], destinazione, progresso)
+            self.req_queue.put(("stato", "Installazione aggiornamento..."))
+            aggiornamenti.installa(destinazione)
+            self.after(0, self._chiudi)          # lo script riavvia l'app
+        except Exception as e:
+            self.log(f"[ERRORE] Aggiornamento non riuscito: {e}")
+            self.req_queue.put(("stato", "Aggiornamento non riuscito."))
 
     def _imposta_icona(self):
         """Applica alla finestra la stessa icona .ico usata per l'eseguibile.
