@@ -1,0 +1,9 @@
+﻿__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+scan_gui_config.json
+*.pfx
+# L'eseguibile non sta nel repository: viene allegato alle release
+ScanProgram/*.exe
