@@ -38,6 +38,15 @@ PARAMETRI = ["DEVICE_ID", "DEVICE_NAME", "DPI", "COLOR_MODE", "SOURCE",
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# Marcatore restituito dai dialoghi quando l'utente preme Annulla / chiude la
+# finestra (da NON confondere con una stringa vuota confermata con OK).
+ANNULLATO = object()
+
+
+class OperazioneAnnullata(Exception):
+    """Sollevata quando l'utente annulla un dialogo: interrompe l'elaborazione
+    senza salvare nulla."""
+
 
 def _imposta_appid():
     """Assegna un AppUserModelID esplicito: senza, Windows raggruppa la finestra
@@ -251,15 +260,17 @@ class App(ctk.CTk):
         return self._finestra_input("Richiesta", p, iniziale)
 
     def _finestra_input(self, titolo, testo, iniziale=""):
-        """Finestra di input moderna unica (sostituisce CTkInputDialog e
-        simpledialog): supporta il valore precompilato."""
+        """Finestra di input moderna unica. Ritorna la stringa inserita se si
+        preme OK (anche vuota), oppure ANNULLATO se si preme Annulla / si chiude
+        la finestra: cosi' il chiamante distingue 'campo vuoto confermato' da
+        'operazione annullata'."""
         win = ctk.CTkToplevel(self)
         win.title(titolo)
-        win.geometry("480x200")
+        win.geometry("480x210")
         win.resizable(False, False)
         win.grab_set()
         win.attributes("-topmost", True)
-        risultato = {"val": ""}
+        risultato = {"val": ANNULLATO}          # default = annullato (anche 'X')
         ctk.CTkLabel(win, text=testo, wraplength=440,
                      justify="left").pack(padx=18, pady=(18, 8))
         campo = ctk.CTkEntry(win, width=440)
@@ -280,13 +291,20 @@ class App(ctk.CTk):
                       hover_color="#404040",
                       command=win.destroy).pack(side="left", padx=8)
         campo.bind("<Return>", ok)
+        campo.bind("<Escape>", lambda e: win.destroy())
         self.wait_window(win)
         return risultato["val"]
 
     def gui_input(self, prompt=""):
+        """Sostituto di input() per il motore. Se l'utente annulla il dialogo,
+        solleva OperazioneAnnullata per interrompere l'elaborazione: cosi' il
+        file NON viene salvato."""
         resp = queue.Queue()
         self.req_queue.put(("input", prompt, resp))
-        return resp.get()
+        valore = resp.get()
+        if valore is ANNULLATO:
+            raise OperazioneAnnullata()
+        return valore
 
     def _abilita(self, on):
         stato = "normal" if on else "disabled"
@@ -325,6 +343,8 @@ class App(ctk.CTk):
             self.req_queue.put(("fine",
                                 f"Acquisite {len(immagini)} pagina/e. "
                                 f"Aggiungine altre o elabora."))
+        except OperazioneAnnullata:
+            self.req_queue.put(("fine", "Scansione annullata."))
         except Exception as e:
             self.log(f"[ERRORE] {e}")
             self.req_queue.put(("fine", "Errore scansione - vedi log."))
@@ -389,6 +409,9 @@ class App(ctk.CTk):
             log.info("PDF salvato in: %s", dest)
             self.req_queue.put(("salvato", f"PDF salvato:\n{dest}"))
             self.req_queue.put(("fine", f"Salvato: {os.path.basename(dest)}"))
+        except OperazioneAnnullata:
+            self.log("Operazione annullata: il file NON e' stato salvato.")
+            self.req_queue.put(("fine", "Annullato: nessun file salvato."))
         except Exception as e:
             self.log(f"[ERRORE] {e}")
             self.req_queue.put(("fine", "Errore elaborazione - vedi log."))
