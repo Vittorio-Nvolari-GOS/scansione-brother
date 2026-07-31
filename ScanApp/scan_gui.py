@@ -33,7 +33,7 @@ import aggiornamenti  # noqa: E402
 CONFIG_FILE = os.path.join(BASE, "scan_gui_config.json")
 PARAMETRI = ["DEVICE_ID", "DEVICE_NAME", "DPI", "COLOR_MODE", "SOURCE",
              "OUTPUT_DIR", "OLLAMA_MODEL", "TESSERACT_PATH", "OCR_LANG",
-             "AUTO_INSTALL", "SAVE_OCR_DEBUG"]
+             "PDF_QUALITA", "AUTO_INSTALL", "SAVE_OCR_DEBUG"]
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -475,6 +475,16 @@ class App(ctk.CTk):
 
         riga(6, "Lingue OCR", ctk.CTkEntry(win, textvariable=self.v_lng))
 
+        # Qualita' / compressione del PDF (per rientrare nei limiti di peso)
+        f_qual = ctk.CTkFrame(win, fg_color="transparent")
+        f_qual.grid_columnconfigure(0, weight=1)
+        ctk.CTkComboBox(f_qual, variable=self.v_qual,
+                        values=["Massima", "Alta", "Media", "Bassa", "Minima"]
+                        ).grid(row=0, column=0, sticky="ew")
+        ctk.CTkLabel(f_qual, text="file più leggero →",
+                     text_color="gray").grid(row=0, column=1, padx=(8, 0))
+        riga(7, "Qualità PDF", f_qual)
+
         # Scanner: menu a tendina con i device rilevati (niente ID da incollare)
         f_dev = ctk.CTkFrame(win, fg_color="transparent")
         f_dev.grid_columnconfigure(0, weight=1)
@@ -484,21 +494,21 @@ class App(ctk.CTk):
         ctk.CTkButton(f_dev, text="Rileva", width=70,
                       command=self._rileva_scanner).grid(row=0, column=1,
                                                          padx=(6, 0))
-        riga(7, "Scanner", f_dev)
+        riga(8, "Scanner", f_dev)
 
         f_chk = ctk.CTkFrame(win, fg_color="transparent")
         ctk.CTkCheckBox(f_chk, text="Auto-installa dipendenze",
                         variable=self.v_auto).pack(side="left", padx=(0, 16))
         ctk.CTkCheckBox(f_chk, text="Salva OCR di debug",
                         variable=self.v_dbg).pack(side="left")
-        riga(8, "", f_chk)
+        riga(9, "", f_chk)
 
         # Popola subito l'elenco degli scanner disponibili
         if not self._scanner_noti:
             self._rileva_scanner()
 
         f_btn = ctk.CTkFrame(win, fg_color="transparent")
-        f_btn.grid(row=9, column=0, columnspan=2, pady=16)
+        f_btn.grid(row=10, column=0, columnspan=2, pady=16)
         ctk.CTkButton(f_btn, text="Salva",
                       command=lambda: (self._salva_config(), win.destroy())
                       ).pack(side="left", padx=8)
@@ -582,6 +592,8 @@ class App(ctk.CTk):
         # Etichetta mostrata nel menu a tendina degli scanner
         self.v_dev_label = ctk.StringVar(value="")
         self._scanner_noti = []
+        self.v_qual = ctk.StringVar(value=engine.CONFIG.get("PDF_QUALITA",
+                                                            "Massima"))
         self.v_auto = ctk.BooleanVar(value=engine.CONFIG["AUTO_INSTALL"])
         self.v_dbg = ctk.BooleanVar(value=engine.CONFIG.get("SAVE_OCR_DEBUG",
                                                             True))
@@ -599,6 +611,7 @@ class App(ctk.CTk):
                 self.v_tes.set(engine.CONFIG["TESSERACT_PATH"])
                 self.v_lng.set(engine.CONFIG["OCR_LANG"])
                 self.v_dev.set(engine.CONFIG["DEVICE_ID"])
+                self.v_qual.set(engine.CONFIG.get("PDF_QUALITA", "Massima"))
                 self.v_auto.set(engine.CONFIG["AUTO_INSTALL"])
                 self.v_dbg.set(engine.CONFIG.get("SAVE_OCR_DEBUG", True))
             except Exception:
@@ -623,6 +636,7 @@ class App(ctk.CTk):
         engine.CONFIG["OLLAMA_MODEL"] = self.v_mod.get()
         engine.CONFIG["TESSERACT_PATH"] = self.v_tes.get()
         engine.CONFIG["OCR_LANG"] = self.v_lng.get()
+        engine.CONFIG["PDF_QUALITA"] = self.v_qual.get()
         # Scanner scelto dal menu a tendina (o '' = automatico)
         scelto = self._device_id_scelto()
         self.v_dev.set(scelto)

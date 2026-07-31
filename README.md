@@ -97,6 +97,7 @@ ollama pull qwen2.5:3b
 | Modello Ollama | `qwen2.5:3b` | |
 | Tesseract | `C:\Program Files\Tesseract-OCR\tesseract.exe` | |
 | Lingue OCR | `ita+eng` | |
+| Qualità PDF | Massima | comprime il PDF per rientrare nei limiti di peso: Massima → Alta → Media → Bassa → Minima (file sempre più leggero) |
 
 Le impostazioni si salvano in `scan_gui_config.json`, accanto all'eseguibile.
 

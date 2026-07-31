@@ -131,6 +131,11 @@ CONFIG = {
     "OLLAMA_MODEL": "qwen2.5:3b",    # alternative: "llama3.2:3b", "qwen2.5:1.5b"
     "OLLAMA_TIMEOUT": 300,           # secondi (modelli 3B su CPU sono lenti)
 
+    # Qualita'/compressione del PDF salvato. Valori: "Massima", "Alta",
+    # "Media", "Bassa", "Minima". Piu' bassa = file piu' leggero (utile per i
+    # limiti di peso di certi portali). "Massima" = nessuna perdita.
+    "PDF_QUALITA": "Massima",
+
     # Naming file
     # Alzato per far stare: tipo_Cognome_Nome_Paese_Servizio_Data
     "MAX_FILENAME_LEN": 100,
@@ -961,23 +966,54 @@ def scansione_naps2_fallback(temp_dir, log):
 # ===========================================================================
 # UNIONE IMMAGINI -> PDF
 # ===========================================================================
-def immagini_in_pdf(immagini, pdf_out, log):
-    """Unisce le immagini in un unico PDF. Usa img2pdf (qualita' migliore,
-    nessuna ricompressione); fallback a Pillow."""
-    try:
-        import img2pdf
-        with open(pdf_out, "wb") as f:
-            f.write(img2pdf.convert(immagini))
-        log.info("PDF creato con img2pdf: %s", pdf_out)
-        return pdf_out
-    except Exception as e:
-        log.warning("img2pdf fallito (%s), provo con Pillow.", e)
+# Livelli di compressione del PDF: (qualita_jpeg, fattore_ridimensionamento).
+# Qualita' 100 e fattore 1.0 = nessuna perdita/ridimensionamento.
+LIVELLI_QUALITA = {
+    "Massima":   (95, 1.00),   # file piu' grande, qualita' migliore
+    "Alta":      (85, 1.00),
+    "Media":     (70, 0.85),   # buon compromesso per l'invio
+    "Bassa":     (55, 0.70),
+    "Minima":    (40, 0.55),   # file piu' piccolo, per limiti stretti
+}
 
+
+def immagini_in_pdf(immagini, pdf_out, log):
+    """Unisce le immagini in un unico PDF.
+
+    Se la qualita' e' impostata su 'Massima' si usa img2pdf senza ricompressione
+    (fedelta' totale). Con gli altri livelli le pagine vengono ricompresse in
+    JPEG (ed eventualmente ridotte) per rientrare in un limite di peso: piu'
+    bassa la qualita', piu' piccolo il file."""
+    livello = CONFIG.get("PDF_QUALITA", "Massima")
+    qualita, fattore = LIVELLI_QUALITA.get(livello, (95, 1.0))
+
+    # --- Massima qualita': nessuna ricompressione (comportamento originale) ---
+    if livello == "Massima":
+        try:
+            import img2pdf
+            with open(pdf_out, "wb") as f:
+                f.write(img2pdf.convert(immagini))
+            log.info("PDF creato con img2pdf (qualita' massima): %s", pdf_out)
+            return pdf_out
+        except Exception as e:
+            log.warning("img2pdf fallito (%s), provo con Pillow.", e)
+
+    # --- Con compressione: ricomprime le pagine in JPEG (via Pillow) ---
     try:
         from PIL import Image
-        pil = [Image.open(p).convert("RGB") for p in immagini]
-        pil[0].save(pdf_out, save_all=True, append_images=pil[1:])
-        log.info("PDF creato con Pillow: %s", pdf_out)
+        pagine = []
+        for p in immagini:
+            img = Image.open(p).convert("RGB")
+            if fattore < 1.0:
+                nuova = (max(1, int(img.width * fattore)),
+                         max(1, int(img.height * fattore)))
+                img = img.resize(nuova, Image.LANCZOS)
+            pagine.append(img)
+        pagine[0].save(pdf_out, save_all=True, append_images=pagine[1:],
+                       format="PDF", quality=qualita, optimize=True)
+        dim = os.path.getsize(pdf_out) / 1048576.0
+        log.info("PDF creato con compressione '%s' (qualita' JPEG %d, scala %.0f%%): "
+                 "%s  (%.2f MB)", livello, qualita, fattore * 100, pdf_out, dim)
         return pdf_out
     except Exception as e:
         raise RuntimeError(f"Creazione PDF fallita: {e}")
