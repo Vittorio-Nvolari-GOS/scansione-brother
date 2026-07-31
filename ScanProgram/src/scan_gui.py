@@ -76,6 +76,7 @@ class App(ctk.CTk):
         self.req_queue = queue.Queue()
         self.occupato = False
         self._thumb_refs = []
+        self._prog_win = None
 
         self._carica_config()
         self._costruisci_ui()
@@ -233,6 +234,12 @@ class App(ctk.CTk):
                     self._rinumera()
                 elif tipo == "stato":
                     self.stato.configure(text=voce[1])
+                elif tipo == "prog_apri":
+                    self._prog_apri(voce[1])
+                elif tipo == "prog":
+                    self._prog_aggiorna(voce[1], voce[2])
+                elif tipo == "prog_chiudi":
+                    self._prog_chiudi()
                 elif tipo == "fine":
                     self.occupato = False
                     self._abilita(True)
@@ -702,26 +709,82 @@ class App(ctk.CTk):
                          daemon=True).start()
 
     def _esegui_aggiornamento(self, info):
-        """Scarica il nuovo eseguibile e avvia la sostituzione."""
-        self.req_queue.put(("stato", "Scaricamento aggiornamento..."))
+        """Scarica il nuovo eseguibile e avvia la sostituzione, mostrando una
+        barra di avanzamento grafica per download e installazione."""
+        self.req_queue.put(("prog_apri", "Aggiornamento"))
         try:
             destinazione = os.path.join(tempfile.gettempdir(),
                                         "ScansioneBrother_nuovo.exe")
 
             def progresso(fatti, totale):
                 if totale:
-                    pct = fatti * 100.0 / totale
-                    self.req_queue.put(
-                        ("stato", f"Scaricamento aggiornamento... {pct:.0f}% "
-                                  f"({fatti/1048576:.1f} di {totale/1048576:.1f} MB)"))
+                    fraz = fatti / totale
+                    testo = (f"Scaricamento... {fraz*100:.0f}%  "
+                             f"({fatti/1048576:.1f} di {totale/1048576:.1f} MB)")
+                else:
+                    fraz = None
+                    testo = f"Scaricamento... {fatti/1048576:.1f} MB"
+                self.req_queue.put(("prog", fraz, testo))
 
             aggiornamenti.scarica(info["url"], destinazione, progresso)
-            self.req_queue.put(("stato", "Installazione aggiornamento..."))
+
+            # Fase installazione: avanzamento indeterminato (dura poco)
+            self.req_queue.put(("prog", 1.0,
+                                "Installazione e riavvio in corso..."))
             aggiornamenti.installa(destinazione)
-            self.after(0, self._chiudi)          # lo script riavvia l'app
+            self.after(400, self._chiudi)        # lo script riavvia l'app
         except Exception as e:
             self.log(f"[ERRORE] Aggiornamento non riuscito: {e}")
+            self.req_queue.put(("prog_chiudi",))
             self.req_queue.put(("stato", "Aggiornamento non riuscito."))
+            self.after(0, lambda: messagebox.showerror(
+                "Aggiornamento",
+                f"Aggiornamento non riuscito:\n{e}"))
+
+    # ------------------------------------------------ Finestra avanzamento
+    def _prog_apri(self, titolo):
+        if getattr(self, "_prog_win", None) is not None:
+            return
+        win = ctk.CTkToplevel(self)
+        win.title(titolo)
+        win.geometry("440x150")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+        try:
+            win.grab_set()
+        except Exception:
+            pass
+        win.protocol("WM_DELETE_WINDOW", lambda: None)   # non chiudibile a mano
+        self._prog_lbl = ctk.CTkLabel(win, text="Preparazione...",
+                                      font=ctk.CTkFont(size=13))
+        self._prog_lbl.pack(padx=20, pady=(26, 10))
+        self._prog_bar = ctk.CTkProgressBar(win, width=380)
+        self._prog_bar.pack(padx=20, pady=(0, 20))
+        self._prog_bar.set(0)
+        self._prog_win = win
+
+    def _prog_aggiorna(self, frazione, testo):
+        if getattr(self, "_prog_win", None) is None:
+            return
+        try:
+            self._prog_lbl.configure(text=testo)
+            if frazione is None:
+                self._prog_bar.configure(mode="indeterminate")
+                self._prog_bar.start()
+            else:
+                self._prog_bar.configure(mode="determinate")
+                self._prog_bar.set(max(0.0, min(1.0, frazione)))
+        except Exception:
+            pass
+
+    def _prog_chiudi(self):
+        win = getattr(self, "_prog_win", None)
+        if win is not None:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            self._prog_win = None
 
     def _imposta_icona(self):
         """Applica alla finestra la stessa icona .ico usata per l'eseguibile.

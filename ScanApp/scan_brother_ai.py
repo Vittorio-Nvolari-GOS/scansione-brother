@@ -1461,10 +1461,16 @@ def _valore_dopo_etichetta(testo, etichette, log=None):
     return None
 
 
-def _estrai_da_mrz(testo, log=None):
+def _estrai_da_mrz(testo, log=None, passaporto=False):
     """Estrae cognome/nome dalla riga MRZ (zona a lettura ottica, righe di '<'
-    in fondo al documento). Formato TD1: COGNOME<<NOME<NOME2<<<... E' un
-    formato macchina: fonte piu' affidabile dei campi stampati."""
+    in fondo al documento). E' un formato macchina: la fonte piu' affidabile.
+
+    Due formati:
+      - carta d'identita' (TD1): la riga nomi e' 'COGNOME<<NOME<NOME2<<<'
+      - passaporto (TD3): la riga 1 e' 'P<CCCSURNAME<<GIVEN<NAMES<<<' dove
+        'P' = tipo, 'CCC' = paese emittente; il nome vero inizia DOPO quel
+        prefisso di 5 caratteri.
+    """
     def _leggi(corpo):
         """Da 'COGNOME<<NOME<<<' ricava (cognome, nome), o (None, None)."""
         if not re.fullmatch(r"[A-Z]+(<[A-Z]+)*<<+[A-Z]+(<[A-Z]+)*<*", corpo):
@@ -1475,6 +1481,17 @@ def _estrai_da_mrz(testo, log=None):
         if len(cognome) >= 2 and len(nome) >= 2:
             return cognome, nome
         return None, None
+
+    def _leggi_passaporto(corpo):
+        """Riga 1 passaporto: 'P' + tipo + 3 lettere paese + COGNOME<<NOME.
+        Toglie il prefisso di 5 caratteri e legge il resto. Tollera l'OCR che
+        scambia il primo '<' con una lettera (es. 'PEROU' invece di 'P<ROU')."""
+        if "<<" not in corpo or len(corpo) < 8:
+            return None, None
+        # Il corpo deve iniziare con 'P' (tipo documento passaporto)
+        if not corpo.startswith("P"):
+            return None, None
+        return _leggi(corpo[5:])          # salta P + tipo + paese (3)
 
     # Righe candidate MRZ: senza cifre, con almeno un '<' e composte quasi solo
     # da lettere maiuscole e '<'.
@@ -1502,7 +1519,12 @@ def _estrai_da_mrz(testo, log=None):
             corpo = "".join(p for p in pezzi if p)
             if corpo.count("<") < 3 or "<<" not in corpo:
                 continue
-            cognome, nome = _leggi(corpo)
+            # Sui passaporti si prova prima il formato TD3 (prefisso P + paese)
+            cognome = nome = None
+            if passaporto:
+                cognome, nome = _leggi_passaporto(corpo)
+            if not cognome:
+                cognome, nome = _leggi(corpo)
             if cognome:
                 if log:
                     log.info("Cognome/nome dalla riga MRZ: %s / %s",
@@ -1546,7 +1568,8 @@ def _estrai_identita(testo, log, testo_cf=None):
 
     # PRIORITA' 1: riga MRZ (COGNOME<<NOME) - formato macchina, la fonte
     # piu' affidabile presente sul documento.
-    mrz_cog, mrz_nom = _estrai_da_mrz(testo, log)
+    mrz_cog, mrz_nom = _estrai_da_mrz(testo, log,
+                                      passaporto=(tipo == "passaporto"))
     if mrz_cog and mrz_nom:
         risultato = f"{tipo}_{_titola(mrz_cog)}_{_titola(mrz_nom)}"
         log.info("Nome estratto dalla MRZ: %s", risultato)

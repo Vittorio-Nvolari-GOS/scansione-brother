@@ -23,7 +23,7 @@ import subprocess
 import urllib.request
 
 # Versione dell'applicazione: va aumentata a ogni rilascio.
-VERSIONE = "1.0.1"
+VERSIONE = "1.0.2"
 
 # Repository GitHub da cui scaricare gli aggiornamenti (owner/nome).
 # Viene sostituito automaticamente in fase di pubblicazione.
