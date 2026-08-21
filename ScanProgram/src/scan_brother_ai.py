@@ -1018,6 +1018,186 @@ def immagini_in_pdf(immagini, pdf_out, log):
     except Exception as e:
         raise RuntimeError(f"Creazione PDF fallita: {e}")
 
+# ===========================================================================
+# IMPORTAZIONE DI FILE GIA' ESISTENTI (PDF o foto) - senza usare lo scanner
+# ---------------------------------------------------------------------------
+# Non sempre il documento passa dallo scanner: puo' arrivare come PDF via mail
+# o come foto scattata col telefono. Qui i file vengono normalizzati in pagine
+# immagine identiche a quelle prodotte dalla scansione, cosi' il resto della
+# catena (OCR -> riconoscimento -> PDF) funziona senza modifiche.
+# ===========================================================================
+ESTENSIONI_IMMAGINE = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff",
+                       ".gif", ".webp")
+ESTENSIONI_IMPORTABILI = ESTENSIONI_IMMAGINE + (".pdf",)
+
+
+def _assicura_modulo(modulo, pacchetto, log):
+    """Importa un modulo opzionale, installandolo al volo se AUTO_INSTALL e'
+    attivo. Ritorna il modulo oppure None se non e' disponibile."""
+    import importlib
+    try:
+        return importlib.import_module(modulo)
+    except ImportError:
+        pass
+    if getattr(sys, "frozen", False):
+        # Nell'eseguibile compilato non c'e' pip: il modulo va incluso in fase
+        # di build (--collect-all), qui possiamo solo segnalarlo.
+        log.error("Modulo '%s' non incluso nell'eseguibile.", modulo)
+        return None
+    if not CONFIG.get("AUTO_INSTALL", True):
+        return None
+    log.info("Modulo '%s' mancante -> tento installazione (pip %s).",
+             modulo, pacchetto)
+    _installa_moduli_python({modulo: pacchetto}, log)
+    try:
+        importlib.invalidate_caches()
+        return importlib.import_module(modulo)
+    except ImportError:
+        return None
+
+
+def _slug_file(percorso):
+    """Nome breve e sicuro, ricavato dal file di origine, per i temporanei."""
+    base = os.path.splitext(os.path.basename(percorso))[0]
+    base = re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_")
+    return base[:30] or "file"
+
+
+def _rendi_pdf_pypdfium2(pdf_path, out_dir, prefisso, dpi, log):
+    """Rendering PDF -> immagini con pypdfium2 (wheel pip, nessun programma
+    esterno da installare: e' la via preferita)."""
+    pdfium = _assicura_modulo("pypdfium2", "pypdfium2", log)
+    if pdfium is None:
+        return None
+    documento = pdfium.PdfDocument(pdf_path)
+    try:
+        percorsi = []
+        for idx in range(len(documento)):
+            pagina = documento[idx]
+            immagine = pagina.render(scale=dpi / 72.0).to_pil().convert("RGB")
+            dest = os.path.join(out_dir, f"{prefisso}_{idx + 1:03d}.jpg")
+            immagine.save(dest, "JPEG", quality=95)
+            percorsi.append(dest)
+        log.info("PDF reso con pypdfium2: %d pagina/e a %d DPI.",
+                 len(percorsi), dpi)
+        return percorsi
+    finally:
+        try:
+            documento.close()
+        except Exception:
+            pass
+
+
+def _rendi_pdf_pymupdf(pdf_path, out_dir, prefisso, dpi, log):
+    """Rendering PDF -> immagini con PyMuPDF, se gia' presente sul sistema."""
+    fitz = _assicura_modulo("fitz", "pymupdf", log)
+    if fitz is None:
+        return None
+    documento = fitz.open(pdf_path)
+    try:
+        percorsi = []
+        for idx, pagina in enumerate(documento, 1):
+            pix = pagina.get_pixmap(dpi=dpi)
+            dest = os.path.join(out_dir, f"{prefisso}_{idx:03d}.jpg")
+            pix.save(dest)
+            percorsi.append(dest)
+        log.info("PDF reso con PyMuPDF: %d pagina/e a %d DPI.",
+                 len(percorsi), dpi)
+        return percorsi
+    finally:
+        documento.close()
+
+
+def _rendi_pdf_pdf2image(pdf_path, out_dir, prefisso, dpi, log):
+    """Ultima riserva: pdf2image (richiede Poppler installato a parte)."""
+    try:
+        from pdf2image import convert_from_path
+    except ImportError:
+        return None
+    pagine = convert_from_path(pdf_path, dpi=dpi)
+    percorsi = []
+    for idx, immagine in enumerate(pagine, 1):
+        dest = os.path.join(out_dir, f"{prefisso}_{idx:03d}.jpg")
+        immagine.convert("RGB").save(dest, "JPEG", quality=95)
+        percorsi.append(dest)
+    log.info("PDF reso con pdf2image: %d pagina/e a %d DPI.", len(percorsi), dpi)
+    return percorsi
+
+
+def pdf_in_immagini(pdf_path, out_dir, log, dpi=None, prefisso=None):
+    """Converte un PDF nelle immagini delle sue pagine.
+
+    Prova in ordine pypdfium2, PyMuPDF e pdf2image: il primo che funziona
+    vince. Solleva RuntimeError se nessun motore e' disponibile."""
+    dpi = int(dpi or CONFIG.get("DPI", 300))
+    # Oltre i 400 DPI le pagine A4 diventano enormi senza guadagno per l'OCR.
+    dpi = max(150, min(dpi, 400))
+    prefisso = prefisso or _slug_file(pdf_path)
+    os.makedirs(out_dir, exist_ok=True)
+
+    errori = []
+    for motore in (_rendi_pdf_pypdfium2, _rendi_pdf_pymupdf,
+                   _rendi_pdf_pdf2image):
+        try:
+            percorsi = motore(pdf_path, out_dir, prefisso, dpi, log)
+        except Exception as e:
+            errori.append(f"{motore.__name__}: {e}")
+            log.warning("%s non ha funzionato: %s", motore.__name__, e)
+            continue
+        if percorsi:
+            return percorsi
+        if percorsi is not None:
+            raise RuntimeError(f"Il PDF non contiene pagine: {pdf_path}")
+
+    dettaglio = "; ".join(errori) if errori else "nessun motore disponibile"
+    raise RuntimeError(
+        "Impossibile leggere il PDF: manca un motore di rendering. "
+        "Installa con 'pip install pypdfium2'. (" + dettaglio + ")"
+    )
+
+
+def immagine_importata(percorso, out_dir, log, prefisso=None):
+    """Normalizza una foto/immagine in una pagina JPEG utilizzabile dall'OCR:
+    raddrizza secondo l'orientamento EXIF (le foto da telefono sono quasi
+    sempre ruotate) e converte in RGB."""
+    from PIL import Image, ImageOps
+    os.makedirs(out_dir, exist_ok=True)
+    prefisso = prefisso or _slug_file(percorso)
+    with Image.open(percorso) as img:
+        img = ImageOps.exif_transpose(img)
+        dest = os.path.join(out_dir, f"{prefisso}_001.jpg")
+        img.convert("RGB").save(dest, "JPEG", quality=95)
+    log.info("Immagine importata: %s -> %s", percorso, dest)
+    return [dest]
+
+
+def importa_documenti(percorsi, out_dir, log):
+    """Trasforma i file scelti dall'utente (PDF e/o immagini) nell'elenco delle
+    pagine immagine, nello stesso ordine dei file indicati.
+
+    Ritorna (pagine, errori): 'errori' elenca i file scartati con il motivo,
+    cosi' l'interfaccia puo' importare il resto e segnalarli."""
+    pagine, errori = [], []
+    for indice, percorso in enumerate(percorsi, 1):
+        estensione = os.path.splitext(percorso)[1].lower()
+        prefisso = f"imp{indice:02d}_{_slug_file(percorso)}"
+        try:
+            if estensione == ".pdf":
+                pagine.extend(pdf_in_immagini(percorso, out_dir, log,
+                                              prefisso=prefisso))
+            elif estensione in ESTENSIONI_IMMAGINE:
+                pagine.extend(immagine_importata(percorso, out_dir, log,
+                                                 prefisso=prefisso))
+            else:
+                raise RuntimeError(f"formato non supportato ({estensione})")
+        except Exception as e:
+            errori.append(f"{os.path.basename(percorso)}: {e}")
+            log.error("Import fallito per %s: %s", percorso, e)
+    log.info("Importate %d pagina/e da %d file (%d scartati).",
+             len(pagine), len(percorsi), len(errori))
+    return pagine, errori
+
+
 
 # ===========================================================================
 # OCR con Tesseract

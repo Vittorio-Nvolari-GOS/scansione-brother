@@ -3,6 +3,7 @@
 ============================================================================
  scan_gui.py - Interfaccia moderna (CustomTkinter) per scan_brother_ai.py
  - Anteprima delle pagine scansionate, con possibilita' di aggiungerne altre
+ - Aggiunta di pagine da file gia' esistenti (PDF o foto), senza scanner
  - Impostazioni raggiungibili dall'icona ingranaggio
  Avvio: doppio click su Avvia_ScanApp.bat (o: py scan_gui.py)
 ============================================================================
@@ -64,8 +65,8 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(f"Scansione Brother + OCR + LLM  v{aggiornamenti.VERSIONE}")
-        self.geometry("1020x680")
-        self.minsize(860, 560)
+        self.geometry("1180x700")
+        self.minsize(1000, 560)
         # Icona finestra = stessa dell'eseguibile (icona CustomTkinter)
         self._imposta_icona()
 
@@ -123,28 +124,38 @@ class App(ctk.CTk):
 
         azioni = ctk.CTkFrame(dx)
         azioni.grid(row=0, column=0, sticky="new")
-        azioni.grid_columnconfigure((0, 1, 2), weight=1)
+        azioni.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         self.b_scan = ctk.CTkButton(
             azioni, text="\U0001F4C4  Scansiona pagine", height=52,
             font=ctk.CTkFont(size=15, weight="bold"), command=self.scansiona)
         self.b_scan.grid(row=0, column=0, padx=8, pady=10, sticky="ew")
 
+        # Stesso flusso della scansione, ma partendo da file gia' esistenti
+        # (PDF ricevuto via mail, foto scattata col telefono...).
+        self.b_importa = ctk.CTkButton(
+            azioni, text="\U0001F4C1  Aggiungi PDF/foto", height=52,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color="#1f5f8b", hover_color="#164a6d",
+            command=self.importa)
+        self.b_importa.grid(row=0, column=1, padx=8, pady=10, sticky="ew")
+
         self.b_elabora = ctk.CTkButton(
             azioni, text="✅  Elabora e salva PDF", height=52,
             font=ctk.CTkFont(size=15, weight="bold"),
             fg_color="#2e7d32", hover_color="#1b5e20",
             command=self.elabora)
-        self.b_elabora.grid(row=0, column=1, padx=8, pady=10, sticky="ew")
+        self.b_elabora.grid(row=0, column=2, padx=8, pady=10, sticky="ew")
 
         self.b_svuota = ctk.CTkButton(
             azioni, text="\U0001F5D1  Svuota", height=52,
             fg_color="#8e2424", hover_color="#6f1c1c",
             command=self.svuota)
-        self.b_svuota.grid(row=0, column=2, padx=8, pady=10, sticky="ew")
+        self.b_svuota.grid(row=0, column=3, padx=8, pady=10, sticky="ew")
 
-        self.stato = ctk.CTkLabel(dx, text="Pronto. Scansiona la prima pagina.",
-                                  anchor="w")
+        self.stato = ctk.CTkLabel(
+            dx, text="Pronto. Scansiona la prima pagina "
+                     "oppure aggiungi un PDF/una foto.", anchor="w")
         self.stato.grid(row=1, column=0, sticky="ew", padx=4, pady=(2, 4))
 
         self.log_box = ctk.CTkTextbox(dx, font=("Consolas", 11))
@@ -244,6 +255,8 @@ class App(ctk.CTk):
                     self.occupato = False
                     self._abilita(True)
                     self.stato.configure(text=voce[1])
+                elif tipo == "avviso":
+                    messagebox.showwarning("Attenzione", voce[1])
                 elif tipo == "salvato":
                     self.svuota()
                     messagebox.showinfo("Salvato", voce[1])
@@ -316,6 +329,7 @@ class App(ctk.CTk):
     def _abilita(self, on):
         stato = "normal" if on else "disabled"
         self.b_scan.configure(state=stato)
+        self.b_importa.configure(state=stato)
         self.b_elabora.configure(state=stato)
         self.b_svuota.configure(state=stato)
 
@@ -360,13 +374,73 @@ class App(ctk.CTk):
             sys.stdout = vecchio_stdout
             pythoncom.CoUninitialize()
 
+    # -------------------------------------------------- Importazione file
+    def importa(self):
+        """Aggiunge alla sessione pagine prese da file gia' esistenti (PDF o
+        foto), senza passare dallo scanner. Da qui in poi il flusso e' identico
+        a quello della scansione."""
+        if self.occupato:
+            return
+        percorsi = filedialog.askopenfilenames(
+            title="Scegli i PDF o le foto da aggiungere",
+            filetypes=[
+                ("PDF e immagini",
+                 "*.pdf *.jpg *.jpeg *.png *.bmp *.tif *.tiff *.gif *.webp"),
+                ("PDF", "*.pdf"),
+                ("Immagini",
+                 "*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.gif *.webp"),
+                ("Tutti i file", "*.*"),
+            ])
+        if not percorsi:
+            return
+        self.occupato = True
+        self._abilita(False)
+        self.stato.configure(text="Importazione in corso...")
+        threading.Thread(target=self._worker_importa,
+                         args=(list(percorsi),), daemon=True).start()
+
+    def _worker_importa(self, percorsi):
+        vecchio_input = builtins.input
+        vecchio_stdout = sys.stdout
+        builtins.input = self.gui_input
+        sys.stdout = _StdProxy(self.req_queue)
+        try:
+            self._applica_config()
+            log = engine.setup_logging(engine.CONFIG["LOG_DIR"])
+            batch = tempfile.mkdtemp(prefix="import_", dir=self.session_dir)
+            immagini, errori = engine.importa_documenti(percorsi, batch, log)
+            for p in immagini:
+                self.contatore += 1
+                dest = os.path.join(self.session_dir,
+                                    f"pagina_{self.contatore:03d}.jpg")
+                shutil.move(p, dest)
+                self.req_queue.put(("pagina", dest))
+            if errori:
+                self.req_queue.put(
+                    ("avviso", "File non importati:\n\n" + "\n".join(errori)))
+            if not immagini:
+                self.req_queue.put(("fine", "Nessuna pagina importata."))
+            else:
+                self.req_queue.put(
+                    ("fine", f"Aggiunte {len(immagini)} pagina/e dai file. "
+                             f"Aggiungine altre o elabora."))
+        except OperazioneAnnullata:
+            self.req_queue.put(("fine", "Importazione annullata."))
+        except Exception as e:
+            self.log(f"[ERRORE] {e}")
+            self.req_queue.put(("fine", "Errore importazione - vedi log."))
+        finally:
+            builtins.input = vecchio_input
+            sys.stdout = vecchio_stdout
+
     # -------------------------------------------------------- Elaborazione
     def elabora(self):
         if self.occupato:
             return
         if not self.pagine:
             messagebox.showinfo("Nessuna pagina",
-                                "Scansiona almeno una pagina prima di elaborare.")
+                                "Scansiona almeno una pagina, oppure aggiungi "
+                                "un PDF/una foto, prima di elaborare.")
             return
         self.occupato = True
         self._abilita(False)

@@ -14,6 +14,9 @@ residenza, tipo di servizio e data.
 
 1. **Scansiona** da scanner Brother via WIA — rileva da solo se usare
    l'alimentatore (ADF) o il piano, corregge l'orientamento dei fogli storti.
+   In alternativa allo scanner puoi **aggiungere un PDF o una foto** già
+   presenti sul computer: le pagine entrano nella stessa sessione e seguono
+   lo stesso percorso di riconoscimento.
 2. **Riconosce il documento** fra i fogli scansionati (carta d'identità,
    tessera sanitaria, patente, passaporto).
 3. **Estrae cognome e nome** in modo deterministico e verificato:
@@ -62,6 +65,7 @@ powershell -ExecutionPolicy Bypass -File .\Certificato\Installa_Certificato.ps1
 | Componente | A cosa serve | Note |
 |---|---|---|
 | **Tesseract-OCR** | lettura del testo | serve il pacchetto lingua **ita** |
+| **pypdfium2** | lettura dei PDF importati | modulo Python, già incluso nell'eseguibile |
 | **Ollama** | riserva per documenti generici | facoltativo per i documenti d'identità |
 
 L'app prova a installarli da sola tramite `winget` al primo avvio (opzione
@@ -82,8 +86,31 @@ ollama pull qwen2.5:3b
 1. Avvia `ScansioneBrother.exe`.
 2. **Scansiona pagine** — ripeti per aggiungere fogli; le miniature compaiono a
    sinistra e si possono rimuovere singolarmente.
+   Oppure **Aggiungi PDF/foto** — vedi sotto.
 3. **Elabora e salva PDF** — parte OCR e riconoscimento.
 4. Inserisci il **tipo di servizio**, controlla il nome proposto e conferma.
+
+### Aggiungere un PDF o una foto (senza scanner)
+
+Il pulsante **📁 Aggiungi PDF/foto** apre una finestra di scelta file e mette
+le pagine nella sessione esattamente come se fossero state scansionate: si
+possono mescolare con le pagine dello scanner, riordinare l'aggiunta e
+rimuovere le singole pagine, poi si preme **Elabora e salva PDF** come sempre.
+
+- Si possono selezionare **più file insieme**; un PDF di più pagine diventa
+  altrettante pagine.
+- Formati accettati: `.pdf`, `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.tiff`,
+  `.gif`, `.webp`.
+- Le foto scattate col telefono vengono **raddrizzate** in base
+  all'orientamento registrato dalla fotocamera (EXIF).
+- Le pagine dei PDF vengono rasterizzate alla risoluzione impostata in ⚙
+  (limitata all'intervallo 150–400 DPI: oltre non migliora l'OCR).
+- Se un file non è leggibile, gli altri vengono importati lo stesso e compare
+  un avviso con l'elenco degli scartati.
+
+Per leggere i PDF serve un motore di rendering: l'app usa **pypdfium2**
+(installato da solo al primo uso quando si lavora da sorgente, e incluso
+nell'eseguibile), con riserva su PyMuPDF e pdf2image se già presenti.
 
 ### Impostazioni (icona ⚙)
 
@@ -125,6 +152,8 @@ I log si trovano in `%USERPROFILE%\Scansioni\log\`:
 | Sintomo | Causa probabile |
 |---|---|
 | Nome sbagliato o mancante | scansione di qualità scarsa: prova il piano invece dell'ADF, o alza i DPI |
+| «Impossibile leggere il PDF» | manca il motore di rendering: `pip install pypdfium2` |
+| Foto ruotata di lato | la foto non ha l'orientamento EXIF: ruotala prima di aggiungerla |
 | Chiede sempre quale scanner | seleziona il dispositivo da ⚙ → Scanner e salva |
 | Windows blocca l'app | installa il certificato (vedi sopra) |
 | OCR molto lento | abbassa i DPI a 300 |
@@ -149,10 +178,10 @@ Certificato/
 ### Compilare
 
 ```powershell
-py -m pip install pyinstaller customtkinter pywin32 pillow img2pdf pytesseract requests
+py -m pip install pyinstaller customtkinter pywin32 pillow img2pdf pytesseract requests pypdfium2
 py -m PyInstaller --noconfirm --onefile --windowed --name ScansioneBrother `
    --icon ScanProgram\src\app.ico --add-data "ScanProgram\src\app.ico;." `
-   --collect-all customtkinter `
+   --collect-all customtkinter --collect-all pypdfium2 `
    --hidden-import win32timezone --hidden-import win32com.client --hidden-import pythoncom `
    ScanProgram\src\scan_gui.py
 ```
