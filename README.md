@@ -60,6 +60,13 @@ amministratore**:
 powershell -ExecutionPolicy Bypass -File .\Certificato\Installa_Certificato.ps1
 ```
 
+> **Dalla v1.1.0 il certificato di firma è cambiato** (la chiave del
+> precedente non era più disponibile). Chi aveva già installato il vecchio
+> certificato deve rilanciare `Installa_Certificato.ps1`: il file
+> `ScansioneBrother.cer` nel repository è già quello nuovo. Il vecchio
+> certificato si può rimuovere da `certmgr.msc` → *Autorità di certificazione
+> radice attendibili*.
+
 ### Componenti esterni richiesti
 
 | Componente | A cosa serve | Note |
