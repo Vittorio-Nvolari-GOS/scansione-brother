@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#111417"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="28dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📱 Scansione Documenti"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="20dp" />
+
+        <LinearLayout
+            android:id="@+id/lista_profili"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nuovo collegamento"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Inquadra il QR mostrato dal programma, oppure incolla qui sotto il link (finestra «Scansiona con il telefono» → pulsante «Copia»)."
+            android:textColor="#9aa0a6"
+            android:layout_marginBottom="14dp" />
+
+        <Button
+            android:id="@+id/bottone_scansiona_qr"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="📷 Scansiona QR"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#6a1f8b"
+            android:layout_marginBottom="16dp" />
+
+        <EditText
+            android:id="@+id/campo_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="http://192.168.1.xxx:8765/?pin=1234"
+            android:textColorHint="#666666"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#3a3f45"
+            android:inputType="textUri"
+            android:autofillHints="url"
+            android:layout_marginBottom="12dp" />
+
+        <EditText
+            android:id="@+id/campo_nome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Nome di questo telefono (es. Telefono sportello)"
+            android:textColorHint="#666666"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#3a3f45"
+            android:layout_marginBottom="12dp" />
+
+        <EditText
+            android:id="@+id/campo_soprannome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Soprannome per questo PC (opzionale, es. PC Sportello)"
+            android:textColorHint="#666666"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#3a3f45"
+            android:layout_marginBottom="20dp" />
+
+        <Button
+            android:id="@+id/bottone_connetti"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Connetti"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#1f5f8b" />
+
+        <TextView
+            android:id="@+id/testo_errore_collegamento"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:textColor="#f0a3a3"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</ScrollView>

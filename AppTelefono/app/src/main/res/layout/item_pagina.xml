@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="140dp"
+    android:layout_margin="4dp">
+
+    <ImageView
+        android:id="@+id/immagine_pagina"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:background="#22262b" />
+
+    <TextView
+        android:id="@+id/stato_pagina"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="6dp"
+        android:background="#000000AA"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:text="Invio..." />
+
+</FrameLayout>

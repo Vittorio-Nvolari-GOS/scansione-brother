@@ -30,6 +30,8 @@ sys.path.insert(0, BASE)
 sys.path.insert(0, os.path.dirname(BASE))
 import scan_brother_ai as engine  # noqa: E402
 import aggiornamenti  # noqa: E402
+import certificato  # noqa: E402
+import finestra_telefono  # noqa: E402
 
 CONFIG_FILE = os.path.join(BASE, "scan_gui_config.json")
 PARAMETRI = ["DEVICE_ID", "DEVICE_NAME", "DPI", "COLOR_MODE", "SOURCE",
@@ -78,6 +80,11 @@ class App(ctk.CTk):
         self.occupato = False
         self._thumb_refs = []
         self._prog_win = None
+        self._tel_server = None
+        self._tel_win = None
+        self._tel_lista = None
+        self._tel_qr_ref = None
+        self._telefoni_correnti = []
 
         self._carica_config()
         self._costruisci_ui()
@@ -85,6 +92,10 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._chiudi)
         # Controllo aggiornamenti in background (non rallenta l'avvio)
         threading.Thread(target=self._controlla_aggiornamenti,
+                         daemon=True).start()
+        # Idem per il certificato di firma: si installa da solo se manca o
+        # se nel frattempo ne e' uscito uno nuovo (nessun passaggio manuale).
+        threading.Thread(target=self._controlla_certificato,
                          daemon=True).start()
 
     # ------------------------------------------------------------------ UI
@@ -124,7 +135,7 @@ class App(ctk.CTk):
 
         azioni = ctk.CTkFrame(dx)
         azioni.grid(row=0, column=0, sticky="new")
-        azioni.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        azioni.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
 
         self.b_scan = ctk.CTkButton(
             azioni, text="\U0001F4C4  Scansiona pagine", height=52,
@@ -140,18 +151,26 @@ class App(ctk.CTk):
             command=self.importa)
         self.b_importa.grid(row=0, column=1, padx=8, pady=10, sticky="ew")
 
+        # Server locale: il telefono scatta le pagine e le invia al programma.
+        self.b_telefono = ctk.CTkButton(
+            azioni, text="\U0001F4F1  Scansiona con telefono", height=52,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color="#6a1f8b", hover_color="#511668",
+            command=self.scansiona_con_telefono)
+        self.b_telefono.grid(row=0, column=2, padx=8, pady=10, sticky="ew")
+
         self.b_elabora = ctk.CTkButton(
             azioni, text="✅  Elabora e salva PDF", height=52,
             font=ctk.CTkFont(size=15, weight="bold"),
             fg_color="#2e7d32", hover_color="#1b5e20",
             command=self.elabora)
-        self.b_elabora.grid(row=0, column=2, padx=8, pady=10, sticky="ew")
+        self.b_elabora.grid(row=0, column=3, padx=8, pady=10, sticky="ew")
 
         self.b_svuota = ctk.CTkButton(
             azioni, text="\U0001F5D1  Svuota", height=52,
             fg_color="#8e2424", hover_color="#6f1c1c",
             command=self.svuota)
-        self.b_svuota.grid(row=0, column=3, padx=8, pady=10, sticky="ew")
+        self.b_svuota.grid(row=0, column=4, padx=8, pady=10, sticky="ew")
 
         self.stato = ctk.CTkLabel(
             dx, text="Pronto. Scansiona la prima pagina "
@@ -260,6 +279,9 @@ class App(ctk.CTk):
                 elif tipo == "salvato":
                     self.svuota()
                     messagebox.showinfo("Salvato", voce[1])
+                elif tipo == "telefoni":
+                    self._telefoni_correnti = voce[1]
+                    self._aggiorna_lista_telefoni()
         except queue.Empty:
             pass
         self.after(100, self._poll_queue)
@@ -432,6 +454,16 @@ class App(ctk.CTk):
         finally:
             builtins.input = vecchio_input
             sys.stdout = vecchio_stdout
+
+    # ------------------------------------------------ Scansione da telefono
+    # La finestra (QR/PIN, elenco telefoni, invio notifiche) e' in
+    # finestra_telefono.py: qui restano solo i punti di ingresso richiamati
+    # dai pulsanti e dal poll della coda.
+    def scansiona_con_telefono(self):
+        finestra_telefono.scansiona_con_telefono(self, BASE)
+
+    def _aggiorna_lista_telefoni(self):
+        finestra_telefono.aggiorna_lista(self)
 
     # -------------------------------------------------------- Elaborazione
     def elabora(self):
@@ -751,6 +783,28 @@ class App(ctk.CTk):
         else:
             messagebox.showinfo("Info", "La cartella non esiste ancora.")
 
+    # ---------------------------------------------------------- Certificato
+    def _controlla_certificato(self):
+        """Se il certificato con cui e' firmato l'eseguibile attuale non e'
+        ancora attendibile su questo PC (prima installazione, o perche' nel
+        frattempo ne e' uscito uno nuovo), chiede conferma e lo installa da
+        solo: l'utente non deve piu' cercare ed eseguire lo script a mano.
+        Gira in un thread separato, come il controllo aggiornamenti."""
+        log = engine.setup_logging(engine.CONFIG["LOG_DIR"])
+        try:
+            certificato.controlla_e_installa(log, self._chiedi_conferma_certificato)
+        except Exception as e:
+            log.debug("Controllo certificato non riuscito: %s", e)
+
+    def _chiedi_conferma_certificato(self, messaggio):
+        """Ponte verso il thread dell'interfaccia: la domanda va mostrata
+        (ed e' bloccante) sul thread principale, mentre questa funzione gira
+        chiamata dal thread di controllo in background."""
+        risposta = queue.Queue()
+        self.after(0, lambda: risposta.put(
+            messagebox.askyesno("Certificato di sicurezza", messaggio)))
+        return risposta.get()
+
     # --------------------------------------------------------- Aggiornamenti
     def _controlla_aggiornamenti(self):
         """Chiede a GitHub se esiste una versione piu' recente. Gira in un
@@ -898,6 +952,8 @@ class App(ctk.CTk):
 
     def _chiudi(self):
         try:
+            if self._tel_server is not None:
+                self._tel_server.ferma()
             shutil.rmtree(self.session_dir, ignore_errors=True)
         finally:
             self.destroy()

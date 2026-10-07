@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#111417"
+    android:padding="28dp">
+
+    <TextView
+        android:id="@+id/icona_girare"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔄"
+        android:textSize="72sp"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Documento riconosciuto: gira il documento e inquadra il retro"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="28dp" />
+
+    <Button
+        android:id="@+id/bottone_scatta_retro"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="📷 Scatta il retro"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#2e7d32"
+        android:layout_marginBottom="10dp" />
+
+    <Button
+        android:id="@+id/bottone_solo_fronte"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Invia solo il fronte"
+        android:textColor="#9aa0a6"
+        android:backgroundTint="#1a1d21" />
+
+</LinearLayout>

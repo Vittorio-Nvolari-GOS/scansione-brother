@@ -5,8 +5,16 @@ dist/
 *.spec
 scan_gui_config.json
 *.pfx
+*.pem
 # L'eseguibile non sta nel repository: viene allegato alle release
 ScanProgram/*.exe
 # Pacchetti locali e impostazioni dell'ambiente di lavoro
 *.zip
 .claude/
+
+# App Android (AppTelefono): artefatti di build, non il codice sorgente
+AppTelefono/.gradle/
+AppTelefono/local.properties
+AppTelefono/app/build/
+AppTelefono/build/
+*.apk

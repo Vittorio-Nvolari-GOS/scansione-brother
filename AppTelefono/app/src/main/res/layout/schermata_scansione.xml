@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#111417"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📱 Scansione Documenti"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/bottone_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="☰"
+            android:textSize="20sp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#3a3f45"
+            android:contentDescription="Cambia programma collegato" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/testo_stato"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connessione..."
+        android:textColor="#8fe3b0"
+        android:background="#173a2e"
+        android:padding="10dp"
+        android:textSize="13sp"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/bottone_scatta"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:text="📷 Scatta pagina"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#2e7d32"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Pagine inviate"
+        android:textColor="#9aa0a6"
+        android:textSize="13sp"
+        android:layout_marginBottom="6dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/griglia_pagine"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false" />
+
+</LinearLayout>
