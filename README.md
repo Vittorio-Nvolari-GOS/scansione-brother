@@ -151,9 +151,10 @@ installazione: Python e le librerie sono già incluse.
 Al primo avvio Windows potrebbe segnalare l'app come proveniente da un
 editore sconosciuto, perché firmata con un certificato interno. **Non serve
 più installarlo a mano**: l'app se ne accorge da sola e, se manca (o se nel
-frattempo ne è uscito uno nuovo, come successo con la v1.1.0), chiede una
-volta il permesso e lo installa con un'unica richiesta di Windows (UAC) —
-niente più script da cercare ed eseguire come amministratore.
+frattempo ne è uscito uno nuovo, come successo con la v1.1.0 e di nuovo
+con la v1.4.0), chiede una volta il permesso e lo installa con un'unica
+richiesta di Windows (UAC) — niente più script da cercare ed eseguire come
+amministratore.
 
 Se preferisci farlo comunque a mano (o l'installazione automatica non è
 disponibile, ad esempio eseguendo da sorgente senza i permessi giusti):
@@ -162,8 +163,9 @@ disponibile, ad esempio eseguendo da sorgente senza i permessi giusti):
 powershell -ExecutionPolicy Bypass -File .\Certificato\Installa_Certificato.ps1
 ```
 
-Il vecchio certificato (prima della v1.1.0) si può rimuovere da
-`certmgr.msc` → *Autorità di certificazione radice attendibili*.
+I certificati precedenti (prima della v1.1.0 e prima della v1.4.0) si
+possono rimuovere da `certmgr.msc` → *Autorità di certificazione radice
+attendibili*.
 
 ### Componenti esterni richiesti
 
